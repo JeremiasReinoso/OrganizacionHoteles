@@ -1,32 +1,91 @@
 # HotelManager
 
-Aplicación web de administración hotelera local, funcional y preparada para crecer. La V1 usa HTML5, CSS3, JavaScript ES Modules e IndexedDB; no requiere servidor ni servicios externos.
+Sistema local de administración hotelera para recepción, construido con HTML,
+CSS, JavaScript ES Modules e IndexedDB. No requiere servidor ni servicios
+externos y conserva los datos al recargar o cerrar el navegador.
 
-## Funcionalidades
+## Características
 
-- Configuración inicial del hotel, dashboard operativo y estados de habitaciones.
-- CRUD de tipos, habitaciones y huéspedes.
-- Reservas con validación de solapamiento y fechas de salida no inclusivas.
-- Check-in, check-out, pagos parciales, limpieza y mantenimiento.
-- Reportes, exportación CSV y backup/restauración JSON.
-- Diseño responsive y persistencia local incluso después de cerrar el navegador.
-
-## Uso local
-
-Abrí `index.html` directamente si el navegador permite módulos locales. Para un servidor local sencillo, desde esta carpeta ejecutá cualquier servidor estático, por ejemplo `python3 -m http.server 8080`, y visitá `http://localhost:8080`.
-
-## GitHub Pages
-
-Subí el contenido de esta carpeta a un repositorio y configurá GitHub Pages para publicar desde la rama principal y la carpeta raíz. Todos los recursos usan rutas relativas (`./`), por lo que también funcionan bajo `/HotelManager/`.
+- Dashboard operativo con ingresos reales y pendiente de cobro.
+- Habitaciones, tipos, huéspedes y reservas.
+- Check-in con resumen de estadía y cobro completo, parcial o cero.
+- Check-out con cobro de saldo y envío automático a limpieza.
+- Centro Pagos con historial, origen CHECK_IN, CHECK_OUT o MANUAL.
+- Limpieza, mantenimiento, reportes y backup JSON.
 
 ## Arquitectura
 
-La interfaz está en `js/app.js` y componentes, los casos de uso están en `js/services/`, y el acceso a IndexedDB queda encapsulado en `js/database/`. Para una futura API REST solo hay que reemplazar los repositorios/adaptadores, manteniendo los servicios y la interfaz.
+UI -> Services -> Repositories -> IndexedDB.
 
-## Datos y seguridad
+La UI no contiene reglas financieras. Los services validan y coordinan casos
+de uso; repositories encapsulan stores; IndexedDB es la única persistencia V1.
+Las operaciones críticas usan transacciones atómicas.
 
-La instalación inicia vacía. La carga demo es opcional y explícita. Los backups no se generan automáticamente ni se incluyen en el repositorio. Los datos ingresados se escapan al renderizar y no se utiliza `eval`.
+## Modelo de datos
+
+RoomType define capacidad y precio. Room pertenece a un tipo. Guest tiene
+Reservations. Reservation relaciona huésped, habitación y fechas, y posee
+Payments, CheckIn y CheckOut. Housekeeping y Maintenance acompañan el estado
+de Room. Settings guarda la configuración del hotel.
+
+Payment contiene id, reservationId, guestId, amount, method, date, status,
+origin y notes. Estados financieros: PENDING, PARTIAL y PAID.
+
+## Estados
+
+Reservation: pending, confirmed, checkin, finished, cancelled, no-show.
+Room: available, reserved, occupied, cleaning, maintenance.
+Housekeeping: pending, in-progress, ready.
+
+## Instalación y ejecución local
+
+Abrir index.html si el navegador permite módulos locales. Recomendado:
+
+    python3 -m http.server 8080
+
+Luego abrir http://localhost:8080.
+
+## GitHub Pages
+
+Publicar la carpeta raíz desde la rama principal. Los recursos son relativos y
+funcionan bajo el subdirectorio del repositorio.
+
+## Persistencia y backup
+
+La base es hotel-manager-db, IndexedDB versión 2. El módulo Copias de seguridad
+exporta todos los stores a JSON y permite restaurarlos. Mantener backups fuera
+del repositorio.
+
+## Flujos principales
+
+Reserva: Huésped -> Disponibilidad -> Habitación -> Reserva.
+
+Check-in: Reserva -> Verificación -> Cobro -> Check-in -> Habitación ocupada.
+
+Check-out: Ocupada -> Cobro de saldo -> Reserva finalizada -> Limpieza.
+
+Limpieza: Pendiente -> En limpieza -> Lista -> Disponible.
+
+## Reglas de negocio
+
+Las reglas de fechas, disponibilidad, pagos, exceso de cobro, estados y
+duplicados están centralizadas en hotelService y explicadas en
+docs/business-rules.md.
+
+## Tests
+
+Abrir tests/critical-flows.html desde el servidor local. Cubre pago completo,
+parcial, pago posterior, check-in sin pago, checkout con saldo, doble click y
+exceso de pago. También se verifican sintaxis con node --check y errores de
+consola con el navegador.
+
+## Guía para desarrolladores
+
+Consultar docs/development.md para agregar entidades, repositories, services,
+pantallas, reglas, estados y métodos de pago. docs/ contiene arquitectura,
+base de datos, reglas y flujos sin duplicar detalles del README.
 
 ## Roadmap
 
-V1 local con IndexedDB · V2 usuarios y roles · V3 API · V4 PostgreSQL · V5 sincronización multi-dispositivo · V6 reservas online · V7 panel remoto.
+V1 local con IndexedDB. Próximos pasos: usuarios y roles, API sincronizada,
+PostgreSQL, multi-dispositivo y reservas online.
