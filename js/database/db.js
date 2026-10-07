@@ -1,9 +1,56 @@
-import {DB_NAME,DB_VERSION,STORES} from '../core/constants.js';
+/**
+ * db.js
+ *
+ * Adaptador de IndexedDB de HotelManager V1. La base hotel-manager-db está
+ * en la versión 2. La migración conserva datos y añade el índice reservationId
+ * al store de pagos. Los repositories encapsulan el CRUD; los services usan
+ * atomicWrite cuando una operación debe ser todo-o-nada.
+ */
+import { DB_NAME, DB_VERSION, STORES } from '../core/constants.js';
 let database;
-export function openDB(){if(database)return Promise.resolve(database);return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,DB_VERSION);req.onupgradeneeded=()=>{const db=req.result;STORES.forEach(name=>{if(!db.objectStoreNames.contains(name)){const store=db.createObjectStore(name,{keyPath:'id'});store.createIndex('createdAt','createdAt');}})};req.onsuccess=()=>{database=req.result;resolve(database)};req.onerror=()=>reject(req.error)});}
-export async function all(store){const db=await openDB();return new Promise((resolve,reject)=>{const req=db.transaction(store,'readonly').objectStore(store).getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
-export async function get(store,id){const db=await openDB();return new Promise((resolve,reject)=>{const req=db.transaction(store,'readonly').objectStore(store).get(id);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
-export async function put(store,value){const db=await openDB();return new Promise((resolve,reject)=>{const req=db.transaction(store,'readwrite').objectStore(store).put(value);req.onsuccess=()=>resolve(value);req.onerror=()=>reject(req.error)})}
-export async function remove(store,id){const db=await openDB();return new Promise((resolve,reject)=>{const req=db.transaction(store,'readwrite').objectStore(store).delete(id);req.onsuccess=()=>resolve();req.onerror=()=>reject(req.error)})}
-export async function clearStore(store){const db=await openDB();return new Promise((resolve,reject)=>{const req=db.transaction(store,'readwrite').objectStore(store).clear();req.onsuccess=resolve;req.onerror=()=>reject(req.error)})}
-export async function replaceAll(data){const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction(STORES,'readwrite');STORES.forEach(s=>{tx.objectStore(s).clear();(data[s]||[]).forEach(item=>tx.objectStore(s).put(item))});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
+
+export function openDB() {
+  if (database) return Promise.resolve(database);
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      STORES.forEach((name) => {
+        const store = db.objectStoreNames.contains(name) ? request.transaction.objectStore(name) : db.createObjectStore(name, { keyPath: 'id' });
+        if (!store.indexNames.contains('createdAt')) store.createIndex('createdAt', 'createdAt');
+        if (name === 'payments' && !store.indexNames.contains('reservationId')) store.createIndex('reservationId', 'reservationId');
+      });
+    };
+    request.onsuccess = () => { database = request.result; database.onversionchange = () => database.close(); resolve(database); };
+    request.onerror = () => reject(request.error);
+  });
+}
+const requestPromise = (request) => new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+export async function all(storeName) { const db = await openDB(); return requestPromise(db.transaction(storeName, 'readonly').objectStore(storeName).getAll()); }
+export async function get(storeName, id) { const db = await openDB(); return requestPromise(db.transaction(storeName, 'readonly').objectStore(storeName).get(id)); }
+export async function put(storeName, value) { const db = await openDB(); await requestPromise(db.transaction(storeName, 'readwrite').objectStore(storeName).put(value)); return value; }
+export async function remove(storeName, id) { const db = await openDB(); await requestPromise(db.transaction(storeName, 'readwrite').objectStore(storeName).delete(id)); }
+export async function clearStore(storeName) { const db = await openDB(); await requestPromise(db.transaction(storeName, 'readwrite').objectStore(storeName).clear()); }
+export async function replaceAll(data) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORES, 'readwrite');
+    STORES.forEach((name) => { const store = transaction.objectStore(name); store.clear(); (data[name] || []).forEach((item) => store.put(item)); });
+    transaction.oncomplete = resolve; transaction.onerror = () => reject(transaction.error); transaction.onabort = () => reject(transaction.error || new Error('La transacción fue cancelada.'));
+  });
+}
+/**
+ * Ejecuta escrituras de varios stores en una sola transacción.
+ * @param {string[]} storeNames - Stores participantes.
+ * @param {(stores: Record<string, IDBObjectStore>) => void} callback - Operaciones sobre esos stores.
+ * @returns {Promise<void>} Se resuelve cuando IndexedDB confirma el lote.
+ */
+export async function atomicWrite(storeNames, callback) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeNames, 'readwrite');
+    const stores = Object.fromEntries(storeNames.map((name) => [name, transaction.objectStore(name)]));
+    try { callback(stores); } catch (error) { transaction.abort(); reject(error); return; }
+    transaction.oncomplete = resolve; transaction.onerror = () => reject(transaction.error); transaction.onabort = () => reject(transaction.error || new Error('La operación no pudo confirmarse.'));
+  });
+}
