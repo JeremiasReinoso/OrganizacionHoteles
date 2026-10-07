@@ -1,0 +1,1 @@
+export const today=()=>new Date().toISOString().slice(0,10); export const nights=(from,to)=>Math.max(0,Math.round((new Date(`${to}T00:00:00`)-new Date(`${from}T00:00:00`))/86400000)); export const dateLabel=d=>d?new Date(`${d}T00:00:00`).toLocaleDateString('es-AR'):''; export const overlaps=(aStart,aEnd,bStart,bEnd)=>aStart<bEnd&&bStart<aEnd;
