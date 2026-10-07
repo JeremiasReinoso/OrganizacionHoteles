@@ -1,0 +1,5 @@
+import {LABELS} from '../core/constants.js'; import {esc} from '../utils/formatters.js';
+export const badge=s=>`<span class="badge ${['available','confirmed','finished','ready'].includes(s)?'badge-success':['cancelled','maintenance'].includes(s)?'badge-danger':['pending','reserved','cleaning','in-progress'].includes(s)?'badge-warning':'badge-info'}">${esc(LABELS[s]||s||'—')}</span>`;
+export const empty=(title,text,button='')=>`<div class="empty"><strong>${esc(title)}</strong><span>${esc(text)}</span>${button?`<div style="margin-top:14px">${button}</div>`:''}</div>`;
+export const modal=(title,body)=>`<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-head"><h2>${esc(title)}</h2><button class="close" data-action="close-modal" aria-label="Cerrar">×</button></div>${body}</div></div>`;
+export function toast(message,type=''){let stack=document.querySelector('.toast-stack');if(!stack){stack=document.createElement('div');stack.className='toast-stack';document.body.append(stack)}const el=document.createElement('div');el.className=`toast ${type}`;el.textContent=message;stack.append(el);setTimeout(()=>el.remove(),3500)}
